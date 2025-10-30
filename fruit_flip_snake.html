@@ -176,7 +176,7 @@
     // === Game Config ===
     const COLS = 24, ROWS = 24;      // grid
     const CELL = 24;                  // px per cell (canvas is 576x576)
-    const DEFAULT_BASE_MS = 130;        // initial step interval
+    const DEFAULT_BASE_MS = 130;      // initial step interval
     const SPEEDUP_EVERY = 4;          // speed up every N fruit
     const SPEED_DELTA = 6;            // -ms each speedup
 
@@ -222,9 +222,6 @@
     const aboutDialog = document.getElementById('aboutDialog');
 
     let speedMultiplier = 1;
-
-    const aboutLink = document.getElementById('aboutLink');
-    const aboutDialog = document.getElementById('aboutDialog');
 
     // High score
     best = Number(localStorage.getItem('sff_best') || localStorage.getItem('ffs_best') || 0);
@@ -373,8 +370,8 @@
       ArrowRight: 'right', KeyD: 'right'
     };
 
-    function translatedDirection(name){
-      if(!reversed) return name;
+    function translateDirection(name, reversedFlag){
+      if(!reversedFlag) return name;
       switch(name){
         case 'up': return 'down';
         case 'down': return 'up';
@@ -382,6 +379,10 @@
         case 'right': return 'left';
         default: return name;
       }
+    }
+
+    function translatedDirection(name){
+      return translateDirection(name, reversed);
     }
 
     function trySetDirection(name){
@@ -423,6 +424,16 @@
       setTip(reverseOnEat ? 'Reverse‑on‑eat enabled. Keep your brain sharp! 🧠' : 'Classic controls enabled.');
     });
 
+    // --- Speed helpers (now pure + tested) ---
+    function computeTickMs(baseMs, speedMult, eaten, speedEvery = SPEEDUP_EVERY, delta = SPEED_DELTA){
+      const bumps = Math.floor(eaten / speedEvery);
+      const base = baseMs / Math.max(0.1, speedMult || 1);
+      return Math.max(60, base - bumps * delta);
+    }
+    function recomputeTickMs(){
+      tickMs = computeTickMs(DEFAULT_BASE_MS, speedMultiplier, eatenCount);
+    }
+
     // Speed control
     speedInput.addEventListener('input', ()=>{
       speedMultiplier = Number(speedInput.value);
@@ -433,16 +444,39 @@
 
     aboutLink.addEventListener('click',(e)=>{ e.preventDefault(); aboutDialog.showModal(); });
 
-    function recomputeTickMs(){
-      const bumps = Math.floor(eatenCount / SPEEDUP_EVERY);
-      const base = DEFAULT_BASE_MS / speedMultiplier;
-      tickMs = Math.max(60, base - bumps * SPEED_DELTA);
-    }
-
     function gameOver(){
       setRunning(false); paused=false;
       setOverlay(true, 'Game Over', `Score ${score}. ${reverseOnEat ? 'Reverse‑on‑eat was ' + (reversed? 'ON (at finish)':'ON') : 'Classic controls.'} Press R to reset.`);
     }
+
+    // --- Lightweight self-tests (open DevTools console to see results) ---
+    (function selfTests(){
+      try {
+        console.groupCollapsed('Snake Fruit Flip: self-tests');
+        // translateDirection tests
+        console.assert(translateDirection('up', false) === 'up', 'translateDirection: up unchanged when not reversed');
+        console.assert(translateDirection('down', true) === 'up', 'translateDirection: down -> up when reversed');
+        console.assert(translateDirection('left', true) === 'right', 'translateDirection: left -> right when reversed');
+
+        // dirFromName tests
+        const u = dirFromName('up');  console.assert(u.x===0 && u.y===-1, 'dirFromName up');
+        const r = dirFromName('right'); console.assert(r.x===1 && r.y===0, 'dirFromName right');
+
+        // computeTickMs tests
+        const base=130;
+        const t0 = computeTickMs(base, 1, 0); // 130
+        const t1 = computeTickMs(base, 1, 4); // 124 (one bump)
+        console.assert(Math.abs(t0-130)<1e-9, 'computeTickMs baseline');
+        console.assert(Math.abs(t1-124)<1e-9, 'computeTickMs one bump');
+        const fast = computeTickMs(base, 1.5, 0);
+        console.assert(fast < t0, 'faster when speed>1');
+        const slow = computeTickMs(base, 0.5, 0);
+        console.assert(slow > t0, 'slower when speed<1');
+        console.groupEnd();
+      } catch(e){
+        console.warn('Self-tests encountered an error:', e);
+      }
+    })();
 
     // boot
     init();

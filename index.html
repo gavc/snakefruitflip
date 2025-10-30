@@ -211,6 +211,8 @@
     const overlayHint = document.getElementById('overlayHint');
     const revBadge = document.getElementById('revBadge');
 
+    let revBadgeTimer = null;
+
     const btnStart = document.getElementById('btnStart');
     const btnPause = document.getElementById('btnPause');
     const btnReset = document.getElementById('btnReset');
@@ -292,7 +294,7 @@
         score += 1; eatenCount += 1;
         setTip(`${food.fruit.name}: ${food.fruit.tip}`);
         food = spawnFood();
-        if(reverseOnEat){ reversed = !reversed; updateReversedBadge(); }
+        if(reverseOnEat){ reversed = !reversed; flashReversedBadge(); }
         recomputeTickMs();
         if(score > best){ best = score; localStorage.setItem('sff_best', String(best)); }
         updateStats();
@@ -302,8 +304,24 @@
     }
 
     function updateReversedBadge(){
-      revBadge.style.display = reversed ? 'inline-flex' : 'none';
-      revBadge.textContent = reversed ? 'Controls Reversed' : '';
+      // Keep hidden unless we explicitly flash it (when a flip occurs)
+      if(!reversed){
+        revBadge.style.display = 'none';
+        revBadge.textContent = '';
+      }
+    }
+
+    function flashReversedBadge(){
+      // Show 'Controls Reversed' briefly, then auto-hide
+      if(revBadgeTimer){ clearTimeout(revBadgeTimer); revBadgeTimer = null; }
+      if(reversed){
+        revBadge.textContent = 'Controls Reversed';
+        revBadge.style.display = 'inline-flex';
+        revBadgeTimer = setTimeout(()=>{ revBadge.style.display = 'none'; }, 3500);
+      } else {
+        revBadge.style.display = 'none';
+        revBadge.textContent = '';
+      }
     }
 
     function draw(){
@@ -420,7 +438,11 @@
 
     modeReverse.addEventListener('change', ()=>{
       reverseOnEat = modeReverse.checked;
-      if(!reverseOnEat){ reversed = false; updateReversedBadge(); }
+      if(!reverseOnEat){
+        reversed = false;
+        if(revBadgeTimer){ clearTimeout(revBadgeTimer); revBadgeTimer = null; }
+        updateReversedBadge();
+      }
       setTip(reverseOnEat ? 'Reverse‑on‑eat enabled. Keep your brain sharp! 🧠' : 'Classic controls enabled.');
     });
 
@@ -468,6 +490,9 @@
         const t1 = computeTickMs(base, 1, 4); // 124 (one bump)
         console.assert(Math.abs(t0-130)<1e-9, 'computeTickMs baseline');
         console.assert(Math.abs(t1-124)<1e-9, 'computeTickMs one bump');
+        const t2 = computeTickMs(base, 1, 8); // 118 (two bumps)
+        console.assert(Math.abs(t2-118)<1e-9, 'computeTickMs two bumps');
+        console.assert(computeTickMs(base, 0.2, 100) >= 60, 'computeTickMs clamps to >=60ms');
         const fast = computeTickMs(base, 1.5, 0);
         console.assert(fast < t0, 'faster when speed>1');
         const slow = computeTickMs(base, 0.5, 0);

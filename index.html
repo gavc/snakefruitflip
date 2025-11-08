@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Snake Fruit Flip</title>
+  <!-- v1.1 (2025-11-08)
+       • Fix: Prevent input after Game Over (could steer away post-crash)
+       • UX: Start button acts as Reset after Game Over
+       • Fix: Reset now respects the Reverse-on-eat checkbox state
+       • Note: 180° turns are still blocked (design) and can look like controls didn't flip
+  -->
   <style>
     :root{
       --bg:#0f172a;            /* slate-900 */
@@ -31,22 +37,13 @@
       grid-template-rows: auto 1fr auto;
     }
 
-    header{
-      display:flex;align-items:center;justify-content:space-between;
-      gap:1rem;padding:1rem clamp(1rem,3vw,2rem);
-    }
-    .title{
-      display:flex;align-items:center;gap:.75rem;font-weight:800;letter-spacing:.3px;
-    }
+    header{ display:flex;align-items:center;justify-content:space-between; gap:1rem;padding:1rem clamp(1rem,3vw,2rem); }
+    .title{ display:flex;align-items:center;gap:.75rem;font-weight:800;letter-spacing:.3px; }
     .title .logo{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));box-shadow:0 10px 25px #22d3ee33,inset 0 0 14px #0006;font-size:22px}
     .title h1{margin:0;font-size:clamp(1.05rem,1.2rem + 1vw,1.7rem)}
     .sub{font-size:.9rem;color:var(--muted)}
 
-    .panel{
-      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-strong) 100%);
-      border:1px solid #ffffff12;border-radius:16px;box-shadow:0 10px 30px #0008, inset 0 0 0 1px #ffffff06;
-      backdrop-filter: blur(6px);
-    }
+    .panel{ background: linear-gradient(180deg, var(--panel) 0%, var(--panel-strong) 100%); border:1px solid #ffffff12;border-radius:16px;box-shadow:0 10px 30px #0008, inset 0 0 0 1px #ffffff06; backdrop-filter: blur(6px); }
 
     .hud{ display:flex;flex-wrap:wrap;gap:.75rem;align-items:center; }
     .card{padding:.6rem .9rem;border-radius:12px}
@@ -181,24 +178,25 @@
     const SPEED_DELTA = 6;            // -ms each speedup
 
     const FRUITS = [
-      {e:'🍎',name:'Apple', tip:'Crisp and rich in fibre.'},
-      {e:'🍌',name:'Banana', tip:'Great source of potassium.'},
-      {e:'🍇',name:'Grapes', tip:'Small bites, big antioxidants.'},
-      {e:'🍓',name:'Strawberry', tip:'Vitamin‑C packed sweetness.'},
-      {e:'🍍',name:'Pineapple', tip:'Tropical zing and bromelain.'},
-      {e:'🥝',name:'Kiwi', tip:'Tangy and fibre‑rich.'},
-      {e:'🍑',name:'Peach', tip:'Juicy with vitamins A & C.'},
-      {e:'🍐',name:'Pear', tip:'Gentle on the gut, full of fibre.'},
-      {e:'🍊',name:'Orange', tip:'Sunshine dose of vitamin C.'},
-      {e:'🍉',name:'Watermelon', tip:'Hydrating and refreshing.'}
+      {e:'\uD83C\uDF4E',name:'Apple', tip:'Crisp and rich in fibre.'},
+      {e:'\uD83C\uDF4C',name:'Banana', tip:'Great source of potassium.'},
+      {e:'\uD83C\uDF47',name:'Grapes', tip:'Small bites, big antioxidants.'},
+      {e:'\uD83C\uDF53',name:'Strawberry', tip:'Vitamin‑C packed sweetness.'},
+      {e:'\uD83C\uDF4D',name:'Pineapple', tip:'Tropical zing and bromelain.'},
+      {e:'\uD83E\uDD5D',name:'Kiwi', tip:'Tangy and fibre‑rich.'},
+      {e:'\uD83C\uDF51',name:'Peach', tip:'Juicy with vitamins A & C.'},
+      {e:'\uD83C\uDF50',name:'Pear', tip:'Gentle on the gut, full of fibre.'},
+      {e:'\uD83C\uDF4A',name:'Orange', tip:'Sunshine dose of vitamin C.'},
+      {e:'\uD83C\uDF49',name:'Watermelon', tip:'Hydrating and refreshing.'}
     ];
 
     // === State ===
     let snake, dir, nextDir, food, score, best, tickMs, running = false, paused = false;
-    let reversed = false; // whether keys are currently flipped
-    let reverseOnEat = true; // feature toggle via UI
+    let reversed = false;         // whether keys are currently flipped
+    let reverseOnEat = true;      // feature toggle via UI
     let eatenCount = 0;
     let lastTime = 0, acc = 0;
+    let isGameOver = false;       // NEW: lock input after death
 
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
@@ -234,10 +232,14 @@
       dir = {x:1,y:0};
       nextDir = {x:1,y:0};
       food = spawnFood();
-      score = 0; eatenCount = 0; reversed = false; speedMultiplier = Number(speedInput.value || 1); speedVal.textContent = speedMultiplier.toFixed(1)+'×'; recomputeTickMs();
+      score = 0; eatenCount = 0; reversed = false; 
+      reverseOnEat = modeReverse.checked;          // NEW: respect checkbox on reset
+      speedMultiplier = Number(speedInput.value || 1); speedVal.textContent = speedMultiplier.toFixed(1)+'×'; 
+      recomputeTickMs();
+      isGameOver = false;                           // NEW: clear game-over lock
       updateStats();
       setTip(`Welcome! Eat fruit, grow long, avoid walls & yourself.`);
-      setOverlay(true, 'Press Start or Space', reverseOnEat ? 'Reverse‑on‑eat is ON — controls flip after each fruit 🍍' : 'Use arrows/WASD to play.');
+      setOverlay(true, 'Press Start or Space', reverseOnEat ? 'Reverse‑on‑eat is ON — controls flip after each fruit \uD83C\uDF4D' : 'Use arrows/WASD to play.');
       setRunning(false); paused = false;
       btnPause.textContent = 'Pause';
       updateReversedBadge();
@@ -319,8 +321,10 @@
         revBadge.style.display = 'inline-flex';
         revBadgeTimer = setTimeout(()=>{ revBadge.style.display = 'none'; }, 3500);
       } else {
-        revBadge.style.display = 'none';
-        revBadge.textContent = '';
+        // Optional: brief note when returning to normal
+        revBadge.textContent = 'Controls Normal';
+        revBadge.style.display = 'inline-flex';
+        revBadgeTimer = setTimeout(()=>{ revBadge.style.display = 'none'; }, 1500);
       }
     }
 
@@ -364,10 +368,13 @@
       // overlay visibility
       overlay.hidden = running && !paused ? true : false;
       overlay.setAttribute('aria-hidden', (running && !paused) ? 'true':'false');
-      if(!running){ overlayTitle.textContent = 'Press Start or Space'; }
+      if(!running && !isGameOver){ overlayTitle.textContent = 'Press Start or Space'; }
       else if(paused){ overlayTitle.textContent = 'Paused'; }
+      else if(isGameOver){ overlayTitle.textContent = 'Game Over'; }
       else { overlayTitle.textContent = ''; }
-      overlayHint.textContent = paused ? 'Space or P to resume.' : (reverseOnEat ? (reversed ? 'Reversed! Up is down. Left is right.' : 'Normal controls — until your next fruit…') : 'Classic controls on.');
+      overlayHint.textContent = isGameOver
+        ? `Score ${score}. ${reverseOnEat ? 'Reverse‑on‑eat was ' + (reversed? 'ON (at finish)':'ON') : 'Classic controls.'} Press R to reset.`
+        : (paused ? 'Space or P to resume.' : (reverseOnEat ? (reversed ? 'Reversed! Up is down. Left is right.' : 'Normal controls — until your next fruit…') : 'Classic controls on.'));
     }
 
     function roundRect(ctx, x, y, w, h, r, fill){
@@ -404,12 +411,13 @@
     }
 
     function trySetDirection(name){
+      if(isGameOver) return;                 // NEW: block input after death
       const t = translatedDirection(name);
       const vec = dirFromName(t);
       // prevent 180° turns into self
       if(vec.x === -dir.x && vec.y === -dir.y) return;
       nextDir = vec;
-      setRunning(true); // start on first move
+      if(!running) setRunning(true);        // start on first move (not after death)
     }
 
     function dirFromName(n){
@@ -424,13 +432,16 @@
 
     window.addEventListener('keydown', (e)=>{
       if(KEY_TO_DIR[e.code]){ e.preventDefault(); trySetDirection(KEY_TO_DIR[e.code]); return; }
-      if(e.code==='Space' || e.code==='KeyP'){ e.preventDefault(); togglePause(); }
+      if(e.code==='Space' || e.code==='KeyP'){ e.preventDefault(); if(!isGameOver) togglePause(); }
       if(e.code==='KeyR'){ e.preventDefault(); reset(); }
     });
 
     // === Buttons ===
-    btnStart.addEventListener('click', ()=>{ if(!running){ setRunning(true); paused=false; } });
-    btnPause.addEventListener('click', togglePause);
+    btnStart.addEventListener('click', ()=>{ 
+      if(isGameOver){ reset(); return; }   // NEW: Start acts as Reset after death
+      if(!running){ setRunning(true); paused=false; }
+    });
+    btnPause.addEventListener('click', ()=>{ if(!isGameOver) togglePause(); }); // NEW guard
     btnReset.addEventListener('click', reset);
 
     function togglePause(){ if(!running){ setRunning(true); } paused = !paused; btnPause.textContent = paused? 'Resume':'Pause'; }
@@ -443,7 +454,7 @@
         if(revBadgeTimer){ clearTimeout(revBadgeTimer); revBadgeTimer = null; }
         updateReversedBadge();
       }
-      setTip(reverseOnEat ? 'Reverse‑on‑eat enabled. Keep your brain sharp! 🧠' : 'Classic controls enabled.');
+      setTip(reverseOnEat ? 'Reverse‑on‑eat enabled. Keep your brain sharp! \uD83E\uDDE0' : 'Classic controls enabled.');
     });
 
     // --- Speed helpers (now pure + tested) ---
@@ -467,6 +478,7 @@
     aboutLink.addEventListener('click',(e)=>{ e.preventDefault(); aboutDialog.showModal(); });
 
     function gameOver(){
+      isGameOver = true;                      // NEW: lock inputs until reset
       setRunning(false); paused=false;
       setOverlay(true, 'Game Over', `Score ${score}. ${reverseOnEat ? 'Reverse‑on‑eat was ' + (reversed? 'ON (at finish)':'ON') : 'Classic controls.'} Press R to reset.`);
     }
